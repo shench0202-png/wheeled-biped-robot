@@ -1,0 +1,301 @@
+<mujoco model="two_wheel_legged_five_bar">
+  <!--
+    Geometry source:
+      C:/project/two wheel-legged robot/.../LegKinematics.*
+      hip pivot spacing  = 40 mm
+      proximal links    = 60 mm
+      distal links      = 100 mm
+      working leg range = approximately 70-155 mm
+
+    Dynamic equivalent masses source:
+      maltab_simulate/LQR/calc_LQR_vary_l.m
+      wheel/base mass   = 0.1500 kg total
+      body/leg mass     = 0.4261 kg total
+
+    User-specified wheel radius overrides the older MATLAB value:
+      wheel radius      = 33 mm
+  -->
+
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.001" integrator="implicitfast" gravity="0 0 -9.81"
+          solver="Newton" iterations="80" tolerance="1e-10"/>
+
+  <visual>
+    <headlight ambient="0.35 0.35 0.35" diffuse="0.75 0.75 0.75"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="135" elevation="-18"/>
+  </visual>
+
+  <asset>
+    <texture name="sky" type="skybox" builtin="gradient"
+             rgb1="0.22 0.32 0.45" rgb2="0.02 0.03 0.05"
+             width="512" height="3072"/>
+    <texture name="grid" type="2d" builtin="checker"
+             rgb1="0.18 0.18 0.18" rgb2="0.28 0.28 0.28"
+             mark="edge" markrgb="0.8 0.8 0.8"
+             width="300" height="300"/>
+    <material name="floor" texture="grid" texuniform="true"
+              texrepeat="8 8" reflectance="0.12"/>
+    <material name="body" rgba="0.12 0.42 0.78 1"/>
+    <material name="left_link" rgba="0.12 0.72 0.42 1"/>
+    <material name="right_link" rgba="0.92 0.42 0.12 1"/>
+    <material name="joint" rgba="0.16 0.16 0.19 1"/>
+    <material name="tire" rgba="0.035 0.035 0.045 1"/>
+    <material name="hub" rgba="0.58 0.62 0.68 1"/>
+    <material name="battery" rgba="0.08 0.12 0.10 1"/>
+  </asset>
+
+  <default>
+    <geom friction="1.2 0.02 0.002" condim="4"/>
+    <joint damping="0.02" armature="0.0002"/>
+
+    <!--
+      The eight leg capsules are both visible geometry and collision geometry.
+      Mechanical joint overlaps are excluded explicitly in <contact>.
+    -->
+    <default class="link">
+      <joint type="hinge" axis="0 1 0" limited="true"
+             range="-1.45 1.45"/>
+      <geom type="capsule" size="0.006"
+            contype="1" conaffinity="1"
+            friction="0.8 0.02 0.002" condim="4"
+            mass="0.0125"/>
+    </default>
+
+    <!-- Joint-test mode: ctrl is target joint angle in radians. -->
+    <default class="hip_position_servo">
+      <position kp="8.0" kv="0.25"
+                ctrllimited="true" ctrlrange="-0.80 0.80"
+                forcelimited="true" forcerange="-2.0 2.0"/>
+    </default>
+
+    <!-- Joint-test mode: ctrl is target wheel speed in rad/s. -->
+    <default class="wheel_velocity_servo">
+      <velocity kv="0.08"
+                ctrllimited="true" ctrlrange="-30 30"
+                forcelimited="true" forcerange="-0.6 0.6"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light pos="0 -1.5 2.0" dir="0 0 -1" directional="true"/>
+    <geom name="ground" type="plane" size="0 0 0.05" material="floor"/>
+
+    <!--
+      Free-body home pose:
+        hip midpoint z       = 0.153 m
+        wheel centre z       = 0.033 m
+        effective leg length = 0.120 m
+      The wheels start on the ground. Gravity, contact, friction and actuator
+      reaction forces act on the complete robot.
+    -->
+    <body name="torso" pos="0 0 0.153">
+      <freejoint name="root"/>
+
+      <!-- 0.3261 kg torso + 8 x 0.0125 kg links = 0.4261 kg. -->
+      <geom name="torso_geom" type="box" pos="0 0 0.035"
+            size="0.050 0.060 0.035"
+            material="body" mass="0.3261"/>
+      <!-- 53.7 x 114 x 26.6 mm battery, mounted under the torso. -->
+      <geom name="battery_pack" type="box" pos="0 0 -0.0133"
+            euler="0 0 1.5707963268"
+            size="0.02685 0.057 0.0133"
+            material="battery" mass="0.222"/>
+      <site name="imu" pos="0 0 0.055" size="0.006" rgba="1 1 0 1"/>
+      <site name="hip_midpoint" pos="0 0 0" size="0.003" rgba="0 1 1 1"/>
+
+      <!-- ==================== LEFT FIVE-BAR LEG ==================== -->
+      <!-- Front branch: static home rotations make joint qpos=0 the 120 mm pose. -->
+      <body name="left_front_upper" pos="0.020 0.070 0"
+            euler="0 -0.7925588591 0" childclass="link">
+        <joint name="left_front_hip"/>
+        <geom name="left_front_upper_geom" fromto="0 0 0 0 0 -0.060"
+              material="left_link"/>
+        <geom type="cylinder" size="0.010 0.007"
+              euler="1.5707963268 0 0" material="joint"
+              contype="0" conaffinity="0" mass="0"/>
+
+        <body name="left_front_lower" pos="0 0 -0.060"
+              euler="0 1.4706289323 0">
+          <joint name="left_front_knee"/>
+          <geom name="left_front_lower_geom" fromto="0 0 0 0 0 -0.100"
+                material="left_link"/>
+          <geom type="cylinder" size="0.009 0.006"
+                euler="1.5707963268 0 0" material="joint"
+                contype="0" conaffinity="0" mass="0"/>
+
+          <!-- The wheel carrier belongs to the front branch. -->
+          <body name="left_wheel_carrier" pos="0 0 -0.100">
+            <site name="left_front_endpoint" size="0.004" rgba="1 1 0 1"/>
+            <site name="left_wheel_contact_site" type="sphere"
+                  size="0.035" rgba="0 0 0 0"/>
+
+            <body name="left_wheel">
+              <joint name="left_wheel_joint" type="hinge" axis="0 1 0"
+                     damping="0.001" armature="0.00005" limited="false"/>
+              <!-- Two wheels total 0.15 kg, matching MATLAB M=0.15 kg. -->
+              <geom name="left_tire" type="cylinder"
+                    size="0.033 0.012" euler="1.5707963268 0 0"
+                    material="tire" mass="0.075"
+                    contype="1" conaffinity="1"
+                    friction="1.4 0.02 0.002" condim="4"/>
+              <geom name="left_hub" type="cylinder"
+                    size="0.012 0.0125" euler="1.5707963268 0 0"
+                    material="hub" mass="0"
+                    contype="0" conaffinity="0"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- Rear branch. Its endpoint is connected to the front wheel carrier. -->
+      <body name="left_rear_upper" pos="-0.020 0.070 0"
+            euler="0 0.7925588591 0" childclass="link">
+        <joint name="left_rear_hip"/>
+        <geom name="left_rear_upper_geom" fromto="0 0 0 0 0 -0.060"
+              material="left_link"/>
+        <geom type="cylinder" size="0.010 0.007"
+              euler="1.5707963268 0 0" material="joint"
+              contype="0" conaffinity="0" mass="0"/>
+
+        <body name="left_rear_lower" pos="0 0 -0.060"
+              euler="0 -1.4706289323 0">
+          <joint name="left_rear_knee"/>
+          <geom name="left_rear_lower_geom" fromto="0 0 0 0 0 -0.100"
+                material="left_link"/>
+          <geom type="cylinder" size="0.009 0.006"
+                euler="1.5707963268 0 0" material="joint"
+                contype="0" conaffinity="0" mass="0"/>
+          <site name="left_rear_endpoint" pos="0 0 -0.100"
+                size="0.004" rgba="1 1 0 1"/>
+        </body>
+      </body>
+
+      <!-- ==================== RIGHT FIVE-BAR LEG ==================== -->
+      <body name="right_front_upper" pos="0.020 -0.070 0"
+            euler="0 -0.7925588591 0" childclass="link">
+        <joint name="right_front_hip"/>
+        <geom name="right_front_upper_geom" fromto="0 0 0 0 0 -0.060"
+              material="right_link"/>
+        <geom type="cylinder" size="0.010 0.007"
+              euler="1.5707963268 0 0" material="joint"
+              contype="0" conaffinity="0" mass="0"/>
+
+        <body name="right_front_lower" pos="0 0 -0.060"
+              euler="0 1.4706289323 0">
+          <joint name="right_front_knee"/>
+          <geom name="right_front_lower_geom" fromto="0 0 0 0 0 -0.100"
+                material="right_link"/>
+          <geom type="cylinder" size="0.009 0.006"
+                euler="1.5707963268 0 0" material="joint"
+                contype="0" conaffinity="0" mass="0"/>
+
+          <body name="right_wheel_carrier" pos="0 0 -0.100">
+            <site name="right_front_endpoint" size="0.004" rgba="1 1 0 1"/>
+            <site name="right_wheel_contact_site" type="sphere"
+                  size="0.035" rgba="0 0 0 0"/>
+
+            <body name="right_wheel">
+              <joint name="right_wheel_joint" type="hinge" axis="0 1 0"
+                     damping="0.001" armature="0.00005" limited="false"/>
+              <geom name="right_tire" type="cylinder"
+                    size="0.033 0.012" euler="1.5707963268 0 0"
+                    material="tire" mass="0.075"
+                    contype="1" conaffinity="1"
+                    friction="1.4 0.02 0.002" condim="4"/>
+              <geom name="right_hub" type="cylinder"
+                    size="0.012 0.0125" euler="1.5707963268 0 0"
+                    material="hub" mass="0"
+                    contype="0" conaffinity="0"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <body name="right_rear_upper" pos="-0.020 -0.070 0"
+            euler="0 0.7925588591 0" childclass="link">
+        <joint name="right_rear_hip"/>
+        <geom name="right_rear_upper_geom" fromto="0 0 0 0 0 -0.060"
+              material="right_link"/>
+        <geom type="cylinder" size="0.010 0.007"
+              euler="1.5707963268 0 0" material="joint"
+              contype="0" conaffinity="0" mass="0"/>
+
+        <body name="right_rear_lower" pos="0 0 -0.060"
+              euler="0 -1.4706289323 0">
+          <joint name="right_rear_knee"/>
+          <geom name="right_rear_lower_geom" fromto="0 0 0 0 0 -0.100"
+                material="right_link"/>
+          <geom type="cylinder" size="0.009 0.006"
+                euler="1.5707963268 0 0" material="joint"
+                contype="0" conaffinity="0" mass="0"/>
+          <site name="right_rear_endpoint" pos="0 0 -0.100"
+                size="0.004" rgba="1 1 0 1"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <!--
+      These bodies meet at ideal revolute/closure joints. Their collision
+      shapes overlap by construction and must not generate contact forces.
+    -->
+    <exclude name="left_lower_closure_exclude"
+             body1="left_front_lower" body2="left_rear_lower"/>
+    <exclude name="left_rear_wheel_joint_exclude"
+             body1="left_rear_lower" body2="left_wheel"/>
+    <exclude name="right_lower_closure_exclude"
+             body1="right_front_lower" body2="right_rear_lower"/>
+    <exclude name="right_rear_wheel_joint_exclude"
+             body1="right_rear_lower" body2="right_wheel"/>
+  </contact>
+
+  <!-- Each connect closes one five-bar loop while preserving endpoint rotation. -->
+  <equality>
+    <connect name="left_five_bar_closure"
+             site1="left_front_endpoint" site2="left_rear_endpoint"
+             solref="0.002 1" solimp="0.95 0.99 0.001"/>
+    <connect name="right_five_bar_closure"
+             site1="right_front_endpoint" site2="right_rear_endpoint"
+             solref="0.002 1" solimp="0.95 0.99 0.001"/>
+  </equality>
+
+  <!--
+    Joint-test controls shown in the Viewer Control panel:
+      hip ctrl   = target angle (rad)
+      wheel ctrl = target speed (rad/s)
+  -->
+  <actuator>
+    <position name="left_front_hip_target" joint="left_front_hip"
+              class="hip_position_servo"/>
+    <position name="left_rear_hip_target" joint="left_rear_hip"
+              class="hip_position_servo"/>
+    <position name="right_front_hip_target" joint="right_front_hip"
+              class="hip_position_servo"/>
+    <position name="right_rear_hip_target" joint="right_rear_hip"
+              class="hip_position_servo"/>
+    <velocity name="left_wheel_speed" joint="left_wheel_joint"
+              class="wheel_velocity_servo"/>
+    <velocity name="right_wheel_speed" joint="right_wheel_joint"
+              class="wheel_velocity_servo"/>
+  </actuator>
+
+  <sensor>
+    <framequat name="imu_orientation" objtype="site" objname="imu"/>
+    <gyro name="imu_gyro" site="imu"/>
+    <accelerometer name="imu_accelerometer" site="imu"/>
+    <touch name="left_wheel_contact" site="left_wheel_contact_site"/>
+    <touch name="right_wheel_contact" site="right_wheel_contact_site"/>
+    <jointpos name="left_wheel_position" joint="left_wheel_joint"/>
+    <jointvel name="left_wheel_velocity" joint="left_wheel_joint"/>
+    <jointpos name="right_wheel_position" joint="right_wheel_joint"/>
+    <jointvel name="right_wheel_velocity" joint="right_wheel_joint"/>
+  </sensor>
+
+  <!-- All articulated joints use their geometry-defined home pose at qpos=0. -->
+  <keyframe>
+    <key name="home"
+         qpos="0 0 0.153 1 0 0 0 0 0 0 0 0 0 0 0 0 0"/>
+  </keyframe>
+</mujoco>
