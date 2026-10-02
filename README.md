@@ -11,6 +11,8 @@
 
 ## MATLAB LQR 運算
 
+[![不同高度LQR的K值](media/LQR.jpg)]
+
 ## 模擬顯示
 
 [![模擬影片預覽](media/maxresdefault.jpg)](https://youtu.be/WPu21eoJ4gM)
