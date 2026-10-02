@@ -13,6 +13,7 @@
 
 ## 模擬顯示
 
+[![模擬影片預覽](media/高度控制_預覽.jpg)](https://youtu.be/WPu21eoJ4gM)
 [觀看模擬影片](https://youtu.be/WPu21eoJ4gM)
 
 ## 實機展示
